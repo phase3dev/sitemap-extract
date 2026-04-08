@@ -63,7 +63,7 @@ Also features a number of optional and advanced settings such as dynamic proxy a
   - Batch processing from file (`--file`)
   - Directory scanning for local `.xml` and `.xml.gz` files (`--directory`)
 - **Configurable output directory** (`--save-dir`)
-- **Smart filename generation** from source URLs
+- **Smart filename generation** with readable source hints plus a short stability hash
 - **Organized output files** with metadata headers
 - **Failed URL recovery files** for easy reprocessing
 - **Summary reporting** with processing statistics
@@ -219,10 +219,12 @@ https://www.example.com/sitemaps/sitemap.xml.gz
 
 ### Individual Sitemap Files
 
-- **Format:** `domain_com_path_<short-hash>.txt`
+- **Format:** `domain_com_hint_<short-hash>.txt`
 - **Contains:** Deduplicated page URLs from that specific sitemap source only
 - **Metadata:** Source URL, generation timestamp, URL count
-- **Uniqueness:** The short hash is derived from the full source URL, so query-distinct child sitemap URLs do not overwrite each other
+- **Readability:** Remote files include the host plus path/query hints when available, and local files include the parent directory plus file stem
+- **Uniqueness:** The short hash is derived from the full original source string, so query-distinct child sitemap URLs do not overwrite each other
+- **Example:** `www_example_com_sitemap_sitemap1_<short-hash>.txt`
 
 ### Merged URL File
 
