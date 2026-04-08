@@ -9,7 +9,7 @@ import hashlib
 import re
 from datetime import datetime
 import sys
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urljoin, urlparse
 import time
 import requests
 from requests.adapters import HTTPAdapter
@@ -53,6 +53,8 @@ BROWSER_HEADERS = [
 ]
 
 FILENAME_HASH_LENGTH = 10
+READABLE_FILENAME_MAX_LENGTH = 60
+READABLE_FILENAME_SUFFIXES = (".xml.gz", ".xml")
 SLEEP_CHUNK_SECONDS = 0.1
 
 
@@ -81,19 +83,99 @@ def sanitize_filename_component(value):
     return sanitized
 
 
+def strip_readable_filename_suffix(value):
+    """Remove common sitemap suffixes from the human-readable filename hint."""
+    stripped_value = value.strip()
+    lowered_value = stripped_value.lower()
+
+    for suffix in READABLE_FILENAME_SUFFIXES:
+        if lowered_value.endswith(suffix):
+            return stripped_value[: -len(suffix)]
+
+    return stripped_value
+
+
+def truncate_readable_filename(value):
+    """Cap the readable filename prefix while keeping separators tidy."""
+    truncated_value = value[:READABLE_FILENAME_MAX_LENGTH].strip("_-")
+    return truncated_value or "sitemap"
+
+
+def build_query_hint(query):
+    """Build a readable hint from the URL query string."""
+    query_params = [(key, value) for key, value in parse_qsl(query) if key or value]
+    if not query_params:
+        return None
+
+    if len(query_params) == 1:
+        key, value = query_params[0]
+        key_hint = sanitize_filename_component(strip_readable_filename_suffix(key))
+        value_hint = sanitize_filename_component(strip_readable_filename_suffix(value))
+
+        if value_hint and len(value_hint) > 2 and not value_hint.isdigit():
+            return value_hint
+
+        return (
+            sanitize_filename_component(
+                "_".join(part for part in (key_hint, value_hint) if part)
+            )
+            or None
+        )
+
+    hint_parts = []
+    for key, value in query_params:
+        key_hint = sanitize_filename_component(strip_readable_filename_suffix(key))
+        value_hint = sanitize_filename_component(strip_readable_filename_suffix(value))
+        combined_hint = "_".join(part for part in (key_hint, value_hint) if part)
+        if combined_hint:
+            hint_parts.append(combined_hint)
+
+    return sanitize_filename_component("_".join(hint_parts)) or None
+
+
+def build_remote_path_hint(path):
+    """Build a readable hint from the trailing remote path segments."""
+    path_segments = [
+        sanitize_filename_component(strip_readable_filename_suffix(segment))
+        for segment in path.strip("/").split("/")
+        if segment
+    ]
+    path_segments = [segment for segment in path_segments if segment]
+
+    if not path_segments:
+        return "root"
+
+    if len(path_segments) == 1:
+        return path_segments[0]
+
+    return "_".join(path_segments[-2:])
+
+
 def build_output_filename(source):
     """Build a readable, collision-resistant filename from the full source."""
     parsed_source = urlparse(source)
 
     if is_remote_source(source):
-        readable_parts = [parsed_source.netloc.replace(".", "_")]
-        path_part = parsed_source.path.strip("/")
-        readable_parts.append(path_part.replace("/", "_") if path_part else "root")
+        readable_parts = [
+            sanitize_filename_component(parsed_source.netloc.replace(".", "_")) or "site",
+            build_remote_path_hint(parsed_source.path),
+        ]
+        query_hint = build_query_hint(parsed_source.query)
+        if query_hint:
+            readable_parts.append(query_hint)
     else:
-        local_name = os.path.basename(os.path.abspath(source))
-        readable_parts = [local_name]
+        absolute_source = os.path.abspath(source)
+        parent_dir = os.path.basename(os.path.dirname(absolute_source))
+        local_name = os.path.basename(absolute_source)
+        readable_parts = [
+            sanitize_filename_component(parent_dir) or "local",
+            sanitize_filename_component(strip_readable_filename_suffix(local_name))
+            or "sitemap",
+        ]
 
-    readable_base = sanitize_filename_component("_".join(readable_parts)) or "sitemap"
+    readable_base = truncate_readable_filename(
+        sanitize_filename_component("_".join(readable_parts)) or "sitemap"
+    )
     source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()[
         :FILENAME_HASH_LENGTH
     ]
