@@ -92,20 +92,6 @@ cd advanced-sitemap-parser
 pip install -r requirements.txt
 ```
 
-## CloudScraper Notice
-
-CloudScraper has an upstream memory leak issue tracked in [VeNoMouS/cloudscraper issue #328](https://github.com/VeNoMouS/cloudscraper/issues/328). In CloudScraper `3.0.0`, `rotate_tls_ciphers=True` can leak memory by mounting a new TLS adapter on every request without closing the old one.
-
-This project uses `cloudscraper.create_scraper(...)`, so long-running or high-volume CloudScraper runs may be affected depending on the installed CloudScraper version and behavior. This is an upstream CloudScraper issue, not a bug in `advanced-sitemap-parser`.
-
-Current workaround from the issue:
-
-```python
-scraper = cloudscraper.create_scraper(rotate_tls_ciphers=False)
-```
-
-If you observe growing memory usage during long CloudScraper runs, test with `rotate_tls_ciphers=False` and rotate sessions externally if needed. If upstream fixes the issue in a later release, this note can be revisited.
-
 ## Quick Start
 
 ### Basic Usage
@@ -310,6 +296,11 @@ Multi-threading includes automatic staggering to avoid simultaneous requests:
 - **Proxy errors**: Verify proxy format and authentication
 - **Memory issues**: Reduce max-workers or process smaller batches
 - **Ctrl+C not working**: Script includes proper interrupt handling
+
+### CloudScraper
+
+- CloudScraper upstream issue #328 may cause memory growth in long-running runs. If you are using the CloudScraper option and observe this, test with `rotate_tls_ciphers=False`. This is an upstream CloudScraper issue, not a bug in `advanced-sitemap-parser`.
+- See the upstream issue for details: [VeNoMouS/cloudscraper issue #328](https://github.com/VeNoMouS/cloudscraper/issues/328).
 
 ### Getting Help
 
